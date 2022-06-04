@@ -5,8 +5,8 @@
 	Utility to create OutputStream-like behavior from a string of data
 	
 	Constructors:
-		OutputStream stream = OutputStream.new(string data, table? options)
-			Returns an OutputStream representing the data in 'data'.
+		OutputStream stream = OutputStream.new(table? options)
+			Returns a new OutputStream.
 			
 			Options is an optional table with the following fields:
 				- CalculateCRC32: A boolean that determines whether or not a CRC32 should be calculated as data is written 
