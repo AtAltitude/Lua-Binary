@@ -30,9 +30,11 @@
 			
 			unsigned int bits = Binary.leftShift(unsigned int a, unsigned int b)
 				Returns a << b, up to 32 bit
+				Obsolete in favor of bit32.lshift(a, n)
 			
 			unsigned int bits = Binary.rightShift(unsigned int a, unsigned int b)
 				Returns a >> b, up to 32 bit
+				Obsolete in favor of bit32.rshift(a, n)
 		
 		Encoding:
 			string bits = Binary.encodeInt(unsigned int value, unsigned int nBytes)
@@ -59,30 +61,40 @@
 local Binary = {}
 
 --Efficiency is key; we might be handling huge amounts of information
-local append 	= table.insert
-local char 		= string.char
-local byte 		= string.byte
-local substr 	= string.sub
-local floor 	= math.floor
-local ceil		= math.ceil
-local abs		= math.abs
-local pow 		= math.pow
-local log 		= math.log
+local append    = table.insert
+local char      = string.char
+local byte      = string.byte
+local substr    = string.sub
+local floor     = math.floor
+local ceil      = math.ceil
+local abs       = math.abs
+local pow       = math.pow
+local log       = math.log
 
 --Function to get a specific bit from a value
 function Binary.getBits(value, bitFrom, bitTo)
 	--If bitTo is not defined, gets a single bit at bitFrom
 	if (bitTo) then
-		local bitFrom = (value/2^(bitFrom - 1))%2^((bitTo - 1) - (bitFrom - 1)+1);
-		return bitFrom - bitFrom % 1;
+		--Generates a bitmask that is all 1s from bitTo downwards (including bitTo)
+		local mask = 2^bitTo - 1
+		
+		--Clear bits from bitFrom downwards (not including bitFrom)
+		if (bitFrom > 0) then
+			mask = bit32.bxor(mask, 2^(bitFrom-1) - 1)
+		end
+		
+		--Get bits and shift down
+		return bit32.rshift(bit32.band(mask, value), bitFrom-1)
 	else
 		--Get a single bit
-		local threshold = 2^(bitFrom-1);
-		return (value%(threshold + threshold) >= threshold) and 1 or 0;
+		local mask = 2^(bitFrom-1)
+		return (bit32.band(mask, value) > 0) and 1 or 0
 	end
 end
 
 --Binary logic
+--These functions are retained for backwards compatibility but no longer used
+--Just invokes the bit32 library because it's more performant
 function Binary.bitwiseOr(a, b)
 	return bit32.bor(a, b)
 	
@@ -130,11 +142,13 @@ end
 
 --Shifting
 function Binary.leftShift(a, n)
-	return math.floor(a * math.pow(2, n)) % 4294967296
+	return bit32.lshift(a, n)
+	--return math.floor(a * math.pow(2, n)) % 4294967296
 end
 
 function Binary.rightShift(a, n)
-	return math.floor(a / math.pow(2, n))
+	return bit32.rshift(a, n)
+	--return math.floor(a / math.pow(2, n))
 end
 
 --Integers
@@ -214,19 +228,19 @@ function Binary.encodeDouble(number)
 	end
 	
 	--Prepare the values for encoding
-	local expOut = exponent + 1023								--The exponent is an 11 bit offset-binary
-	local fractionOut = fraction * pow2to52						--The fraction is 52 bit, so multiplying it by 2^52 will give us an integer
+	local expOut = exponent + 1023                              --The exponent is an 11 bit offset-binary
+	local fractionOut = fraction * pow2to52                     --The fraction is 52 bit, so multiplying it by 2^52 will give us an integer
 	
 	--Combine the values into 8 bytes and return the result
 	return char(
-			128*sign + floor(expOut/16),						--Byte 0: Sign and then shift exponent down by 4 bit
-			((expOut%16)*16 + floor(fractionOut/f48))%256, 		--Byte 1: Shift fraction up by 4 to give most significant bits, and fraction down by 48
-			floor(fractionOut/f40)%256,							--Byte 2: Shift fraction down 40 bit
-			floor(fractionOut/f32)%256,							--Byte 3: Shift fraction down 32 bit
-			floor(fractionOut/f24)%256,							--Byte 4: Shift fraction down 24 bit
-			floor(fractionOut/f16)%256,							--Byte 5: Shift fraction down 16 bit
-			floor(fractionOut/f08)%256,							--Byte 6: Shift fraction down 8 bit
-			floor(fractionOut % 256)							--Byte 7: Last 8 bits of the fraction
+			128*sign + floor(expOut/16),                        --Byte 0: Sign and then shift exponent down by 4 bit
+			((expOut%16)*16 + floor(fractionOut/f48))%256,      --Byte 1: Shift fraction up by 4 to give most significant bits, and fraction down by 48
+			floor(fractionOut/f40)%256,                         --Byte 2: Shift fraction down 40 bit
+			floor(fractionOut/f32)%256,                         --Byte 3: Shift fraction down 32 bit
+			floor(fractionOut/f24)%256,                         --Byte 4: Shift fraction down 24 bit
+			floor(fractionOut/f16)%256,                         --Byte 5: Shift fraction down 16 bit
+			floor(fractionOut/f08)%256,                         --Byte 6: Shift fraction down 8 bit
+			floor(fractionOut % 256)                            --Byte 7: Last 8 bits of the fraction
 		)
 end
 
@@ -302,15 +316,15 @@ function Binary.encodeFloat(number)
 	end
 
 	--Prepare the values for encoding
-	local expOut = exponent + 127								--The exponent is an 11 bit offset-binary
-	local fractionOut = fraction * pow2to23						--The fraction is 52 bit, so multiplying it by 2^52 will give us an integer
+	local expOut = exponent + 127                           --The exponent is an 11 bit offset-binary
+	local fractionOut = fraction * pow2to23                 --The fraction is 52 bit, so multiplying it by 2^52 will give us an integer
 
 	--Combine the values into 8 bytes and return the result
 	return char(
-		128*sign + floor(expOut/2),							--Byte 0: Sign and then shift exponent down by 4 bit
-		((expOut%2)*128 + floor(fractionOut/f16))%256, 		--Byte 1: Shift fraction up by 4 to give most significant bits, and fraction down by 16
-		floor(fractionOut/f08)%256,							--Byte 2: Shift fraction down 8 bit
-		floor(fractionOut % 256)							--Byte 3: Last 8 bits of the fraction
+		128*sign + floor(expOut/2),                         --Byte 0: Sign and then shift exponent down by 4 bit
+		((expOut%2)*128 + floor(fractionOut/f16))%256,      --Byte 1: Shift fraction up by 4 to give most significant bits, and fraction down by 16
+		floor(fractionOut/f08)%256,                         --Byte 2: Shift fraction down 8 bit
+		floor(fractionOut % 256)                            --Byte 3: Last 8 bits of the fraction
 	)
 end
 
